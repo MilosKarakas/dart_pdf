@@ -20,6 +20,7 @@ import 'package:meta/meta.dart';
 import 'package:vector_math/vector_math_64.dart';
 
 import '../../pdf.dart';
+import '../pdf/font/bidi_utils.dart' as bidi;
 import 'basic.dart';
 import 'document.dart';
 import 'flex.dart';
@@ -325,6 +326,42 @@ class MultiPage extends Page {
           continue;
         }
 
+        late Widget childCopy;
+
+        // Else if it's a Text widget, we split it into multiple widgets
+        if (child is Text) {
+          String text = child.text.toPlainText();
+          List<String> subTexts = [];
+          int numberOfLines = 0;
+          const maxCharsPerLine = 70; // 30 lines per 70 chars
+          for (int charIndex = 0; charIndex < text.length; charIndex++) {
+            while(numberOfLines < 30 && charIndex < text.length) {
+              int length = 0;
+              while (length < maxCharsPerLine) {
+                length++;
+                if (text[charIndex + length] == '\n') {
+                  numberOfLines++;
+                  charIndex+=length;
+                  break;
+                }
+              }
+
+              if (numberOfLines == 30 || charIndex >= text.length) {
+                subTexts.add(text.substring(charIndex, charIndex+length));
+              }
+            }
+          }
+
+          if (subTexts.length > 1) {
+            childCopy = Column(
+              mainAxisSize: MainAxisSize.min,
+              children: subTexts.map((text) => Text(text)).toList(),
+            );
+          } else {
+            childCopy = child;
+          }
+        }
+
         // Else we crash if the widget is too big and cannot be separated
         if (!canSpan) {
           throw Exception(
@@ -333,7 +370,7 @@ class MultiPage extends Page {
               'You probably need a SpanningWidget or use a single page layout');
         }
 
-        final span = child;
+        final span = childCopy as SpanningWidget;
 
         if (savedContext != null) {
           // Restore saved context
